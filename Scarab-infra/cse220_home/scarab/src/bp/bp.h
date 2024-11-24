@@ -140,6 +140,9 @@ typedef struct Bp_Data_struct {
   struct Br_Conf_struct* br_conf;
 
   uns32 global_hist;
+  uns32* global_history_table;        // Global pattern history table (PHT)
+  uns32* local_history_table;         // Local history table
+  uns32* local_pattern_table;         // Local pattern history table (PHT)
   Cache btb;
 
   struct {
@@ -163,6 +166,10 @@ typedef struct Bp_Data_struct {
   uns8  target_bit_length;
 
   Flag on_path_pred;
+  // New fields for two-level branch predictor
+  uns32 *global_history_table; // Global pattern history table (PHT) for two-level predictor
+  uns32 *local_history_table;  // Local history table (LHT) if using local history
+  uns32 *local_pattern_table;  // Local pattern history table (LPT) if using local prediction
 
   List cbrs_in_machine;
 
@@ -178,6 +185,7 @@ typedef enum Bp_Id_enum {
   HYBRIDGP_BP,
   TAGESCL_BP,
   TAGESCL80_BP,
+  TWO_LEVEL_BP,  // Add new two-level branch predictor here
 #define DEF_CBP(CBP_NAME, CBP_CLASS) CBP_CLASS##_BP,
 #include "cbp_table.def"
 #undef DEF_CBP
@@ -218,6 +226,10 @@ typedef struct Bp_struct {
   void (*recover_func)(Recovery_Info*); /* called to recover the bp when a
                                            misprediction is realized */
   uns8 (*full_func)(uns);
+
+  // Add new functions for two-level predictor
+  void (*global_update_func)(Op*);  // Update for global history-based PHT
+  void (*local_update_func)(Op*);   // Update for local history-based LHT
 } Bp;
 
 typedef struct Bp_Btb_struct {
@@ -290,5 +302,20 @@ void inc_bstat_fetched(Op* op);
 void inc_bstat_miss(Op* op);
 
 /**************************************************************************************/
+
+#define GLOBAL_HISTORY_SIZE  16  // Example size for the global history register (GHR)
+#define LOCAL_HISTORY_SIZE   16  // Size for local history table
+#define GLOBAL_PHT_SIZE      1024  // Size of the global pattern history table
+#define LOCAL_PHT_SIZE       1024  // Size of the local pattern history table
+
+
+
+void two_level_predictor_init(void); // Initialize the two-level branch predictor
+uns8 two_level_predict_op(Op* op);   // Prediction function for the two-level predictor
+void two_level_update_func(Op* op);  // Update function for the two-level predictor
+void two_level_retire_func(Op* op);  // Retirement function for the two-level predictor
+void two_level_recover_func(Recovery_Info* recovery_info); // Recovery function
+void two_level_update_global_history(Op* op);
+void two_level_update_local_history(Op* op);
 
 #endif /* #ifndef __BP_H__ */

@@ -87,6 +87,15 @@ Bp_Data*          g_bp_data        = NULL;
 Flag              USE_LATE_BP      = FALSE;
 extern List       op_buf;
 extern uns        operating_mode;
+// Global History Register (GHR)
+unsigned int global_history_register = 0; // Keep the global history
+
+// Pattern History Table (PHT)
+unsigned char pattern_history_table[MAX_GHR_SIZE]; // Stores the prediction bits for each global history
+
+// Local History Table (LHT) and Local Pattern Table (LPT)
+unsigned int local_history_table[MAX_LOCAL_HISTORY_ENTRIES]; // Local history per branch
+unsigned char local_pattern_table[MAX_LOCAL_HISTORY_ENTRIES];  // Local pattern history
 
 /******************************************************************************/
 // Local prototypes
@@ -311,6 +320,21 @@ void init_bp_data(uns8 proc_id, Bp_Data* bp_data) {
 
 Flag bp_is_predictable(Bp_Data* bp_data, uns proc_id) {
   return !bp_data->bp->full_func(proc_id);
+}
+
+void two_level_predictor_init(void) {
+    // Initialize global history register (GHR)
+    g_bp_data->global_hist = 0;
+
+    // Initialize the pattern history tables for both global and local predictors
+    g_bp_data->global_history_table = (uns32*)malloc(sizeof(uns32) * GLOBAL_PHT_SIZE);
+    memset(g_bp_data->global_history_table, 0, sizeof(uns32) * GLOBAL_PHT_SIZE);
+
+    g_bp_data->local_history_table = (uns32*)malloc(sizeof(uns32) * LOCAL_HISTORY_SIZE);
+    memset(g_bp_data->local_history_table, 0, sizeof(uns32) * LOCAL_HISTORY_SIZE);
+
+    g_bp_data->local_pattern_table = (uns32*)malloc(sizeof(uns32) * LOCAL_PHT_SIZE);
+    memset(g_bp_data->local_pattern_table, 0, sizeof(uns32) * LOCAL_PHT_SIZE);
 }
 
 
@@ -1122,4 +1146,49 @@ void bp_recover_op(Bp_Data* bp_data, Cf_Type cf_type, Recovery_Info* info) {
 
   if (FDIP_DUAL_PATH_PREF_UOC_ONLINE_ENABLE)
     increment_branch_mispredictions(info->PC);
+}
+
+// Two level functions
+void two_level_update_global_history(Op* op) {
+    // Shift the global history register (GHR) and add the branch outcome (1 for taken, 0 for not taken)
+    g_bp_data->global_hist = (g_bp_data->global_hist << 1) | (op->direction == TAKEN ? 1 : 0);
+}
+
+void two_level_update_local_history(Op* op) {
+    // Update the local history table using the branch address
+    uns32 local_index = op->address % LOCAL_HISTORY_SIZE; // Example: use address as index
+    g_bp_data->local_history_table[local_index] = (g_bp_data->local_history_table[local_index] << 1) | (op->direction == TAKEN ? 1 : 0);
+}
+
+void two_level_update_func(Op* op) {
+    // Update both the global and local predictors
+    two_level_update_global_history(op);
+    two_level_update_local_history(op);
+
+    // Update the global and local pattern history tables based on the branch outcome
+    uns32 ghr_index = g_bp_data->global_hist % GLOBAL_PHT_SIZE;
+    g_bp_data->global_history_table[ghr_index] = (g_bp_data->global_history_table[ghr_index] << 1) | (op->direction == TAKEN ? 1 : 0);
+
+    uns32 local_index = op->address % LOCAL_PHT_SIZE;
+    g_bp_data->local_pattern_table[local_index] = (g_bp_data->local_pattern_table[local_index] << 1) | (op->direction == TAKEN ? 1 : 0);
+}
+
+void two_level_retire_func(Op* op) {
+    // Perform necessary updates after branch is retired
+    // This could involve cleaning up or resetting certain state variables.
+    // For simplicity, this example doesn't change much from the regular update function.
+
+    // Handle recovery for mispredictions
+    if (op->direction != two_level_predict_op(op)) {
+        // Perform misprediction recovery
+        // Update predictor state accordingly, perhaps using recovery techniques
+    }
+}
+
+void two_level_recover_func(Recovery_Info* recovery_info) {
+    // Reset or update history tables based on misprediction recovery
+    if (recovery_info->mis_predicted) {
+        // Perform recovery based on global and local history
+        // Example: Reset some history entries
+    }
 }
