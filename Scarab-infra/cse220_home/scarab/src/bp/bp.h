@@ -306,13 +306,15 @@ void inc_bstat_miss(Op* op);
 #define LOCAL_PHT_SIZE       1024  // Size of the local pattern history table
 
 
+// Declare two_level predictor functions
+void bp_two_level_init(void);
+void bp_two_level_timestamp(void);
+int bp_two_level_pred(Addr pc);
+void bp_two_level_spec_update(Addr pc, int outcome);
+void bp_two_level_update(Addr pc, int outcome);
+void bp_two_level_retire(Addr pc);
+void bp_two_level_recover(Addr pc, int outcome);
+void bp_two_level_full(void);
 
-void two_level_predictor_init(void); // Initialize the two-level branch predictor
-uns8 two_level_predict_op(Op* op);   // Prediction function for the two-level predictor
-void two_level_update_func(Op* op);  // Update function for the two-level predictor
-void two_level_retire_func(Op* op);  // Retirement function for the two-level predictor
-void two_level_recover_func(Recovery_Info* recovery_info); // Recovery function
-void two_level_update_global_history(Op* op);
-void two_level_update_local_history(Op* op);
 
 #endif /* #ifndef __BP_H__ */

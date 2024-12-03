@@ -71,13 +71,6 @@ typedef struct PERCEP_Bpc_Data_struct {
                                            // perceptron to support long history
 } PERCEP_Bpc_Data;
 
-
-/**************************************************************************************/
-/* Two-Level Branch Predictor: Global Variables */
-extern uns* local_history_table;   // Local history table for tracking branch-specific history
-extern uns* pattern_history_table; // Pattern history table for storing confidence counters
-
-
 /**************************************************************************************/
 /* Prototypes */
 
@@ -93,7 +86,7 @@ uns8 compute_spawn_path_conf(uns);
 
 
 /**************************************************************************************/
-/* perceptron-based confidence estimator */
+/* perceptron based confidece estimator */
 void conf_perceptron_init(void);
 void conf_perceptron_pred(Op*);
 void conf_perceptron_update(Op*);

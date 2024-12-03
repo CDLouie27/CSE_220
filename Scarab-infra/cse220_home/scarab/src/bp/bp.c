@@ -1159,21 +1159,85 @@ void bp_recover_op(Bp_Data* bp_data, Cf_Type cf_type, Recovery_Info* info) {
 }
 
 // Two level functions
-Flag two_level_predict(Bp_Data *bp_data, Addr branch_addr) {
-    // Extract local history index
-    unsigned int local_index = branch_addr % LOCAL_HISTORY_SIZE;
+#define MAX_LOCAL_HISTORY_ENTRIES 1024
+#define LOCAL_HISTORY_BITS 10 // Example: Using 10 bits for local history
+#define LOCAL_PHT_SIZE (1 << LOCAL_HISTORY_BITS) // Size of local pattern history table
 
-    // Lookup local history
-    unsigned int local_hist = bp_data->local_history_table[local_index];
+// Local history and pattern history tables
+static unsigned int local_history_table[MAX_LOCAL_HISTORY_ENTRIES];
+static unsigned char local_pattern_table[LOCAL_PHT_SIZE];
 
-    // Compute indices for PHTs
-    unsigned int global_index = bp_data->global_hist % GLOBAL_PHT_SIZE;
-    unsigned int local_pht_index = local_hist % LOCAL_PHT_SIZE;
+// Initialize the two-level predictor
+void bp_two_level_init(void) {
+    // Clear the local history and pattern history tables
+    for (int i = 0; i < MAX_LOCAL_HISTORY_ENTRIES; i++) {
+        local_history_table[i] = 0;
+    }
+    for (int i = 0; i < LOCAL_PHT_SIZE; i++) {
+        local_pattern_table[i] = 1; // Initialize to weakly taken (01)
+    }
+    printf("Two-level predictor initialized.\n");
+}
 
-    // Combine global and local predictions (e.g., majority vote or priority)
-    unsigned char global_prediction = bp_data->global_history_table[global_index];
-    unsigned char local_prediction = bp_data->local_pattern_table[local_pht_index];
+// Timestamp function (optional for more complex predictors)
+void bp_two_level_timestamp(void) {
+    // Placeholder: Add logic if timestamping is required
+}
 
-    // Return prediction (e.g., majority vote, 1 for TAKEN, 0 for NOT TAKEN)
-    return (global_prediction > 1 || local_prediction > 1) ? TAKEN : NOT_TAKEN;
+// Make a prediction based on the local history
+int bp_two_level_pred(Addr pc) {
+    unsigned int index = pc % MAX_LOCAL_HISTORY_ENTRIES; // Map PC to history index
+    unsigned int local_history = local_history_table[index];
+    unsigned int pht_index = local_history % LOCAL_PHT_SIZE;
+    return local_pattern_table[pht_index] > 1; // Taken if the counter is >= 2
+}
+
+// Update speculatively based on the prediction
+void bp_two_level_spec_update(Addr pc, int outcome) {
+    // Placeholder: Add speculative update logic if needed
+}
+
+// Update the predictor with the actual outcome
+void bp_two_level_update(Addr pc, int outcome) {
+    unsigned int index = pc % MAX_LOCAL_HISTORY_ENTRIES;
+    unsigned int local_history = local_history_table[index];
+    unsigned int pht_index = local_history % LOCAL_PHT_SIZE;
+
+    // Update the pattern history table
+    if (outcome) {
+        if (local_pattern_table[pht_index] < 3) { // Increment up to 11 (strongly taken)
+            local_pattern_table[pht_index]++;
+        }
+    } else {
+        if (local_pattern_table[pht_index] > 0) { // Decrement down to 00 (strongly not taken)
+            local_pattern_table[pht_index]--;
+        }
+    }
+
+    // Update the local history table
+    local_history_table[index] = ((local_history << 1) | outcome) & ((1 << LOCAL_HISTORY_BITS) - 1);
+}
+
+// Retire the branch (no-op for this simple implementation)
+void bp_two_level_retire(Addr pc) {
+    // Placeholder for retire logic if needed
+}
+
+// Recover the predictor in case of misprediction
+void bp_two_level_recover(Addr pc, int outcome) {
+    // Recover the local history if necessary
+    unsigned int index = pc % MAX_LOCAL_HISTORY_ENTRIES;
+    unsigned int local_history = local_history_table[index];
+    local_history_table[index] = ((local_history << 1) | outcome) & ((1 << LOCAL_HISTORY_BITS) - 1);
+}
+
+// Full reset or dump state
+void bp_two_level_full(void) {
+    printf("Two-level predictor state:\n");
+    for (int i = 0; i < MAX_LOCAL_HISTORY_ENTRIES; i++) {
+        printf("History[%d]: %u\n", i, local_history_table[i]);
+    }
+    for (int i = 0; i < LOCAL_PHT_SIZE; i++) {
+        printf("PHT[%d]: %u\n", i, local_pattern_table[i]);
+    }
 }

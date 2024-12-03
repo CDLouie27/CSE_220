@@ -47,17 +47,12 @@
 /* Defines */
 
 #define OPC_SIZE 512
-#define LHT_SIZE 1024 // Number of entries in the local history table
-#define PHT_SIZE 1024 // Number of entries in the pattern history table
-#define PHT_COUNTER_BITS 2 // Bits for saturation counters in PHT
 
 /**************************************************************************************/
 /* Global Variables */
 
 static Bpc_Data*        bpc_data        = NULL;
 static PERCEP_Bpc_Data* percep_bpc_data = NULL;
-static uns* local_history_table; // Local history table
-static uns* pattern_history_table; // Pattern history table
 
 /**************************************************************************************/
 /* Local prototypes */
@@ -73,35 +68,20 @@ static uns  count_zeros(uns, uns);
 void init_bp_conf() {
   uns ii;
 
-    // Existing initialization
-    bpc_data = (Bpc_Data*)malloc(sizeof(Bpc_Data));
-    bpc_data->bpc_ctr_table = (uns*)malloc(sizeof(uns) * (1 << BPC_BITS));
-    ASSERT(0, bpc_data->bpc_ctr_table);
-    for(ii = 0; ii < (1 << BPC_BITS); ii++) {
-        if(BPC_MECH)  // counter
-            bpc_data->bpc_ctr_table[ii] = 0;
-        else  // majority vote
-            bpc_data->bpc_ctr_table[ii] = N_BIT_MASK(BPC_CIT_BITS);
-    }
+  bpc_data                = (Bpc_Data*)malloc(sizeof(Bpc_Data));
+  bpc_data->bpc_ctr_table = (uns*)malloc(sizeof(uns) * (1 << BPC_BITS));
+  ASSERT(0, bpc_data->bpc_ctr_table);
+  for(ii = 0; ii < (1 << BPC_BITS); ii++) {
+    if(BPC_MECH)  // counter
+      bpc_data->bpc_ctr_table[ii] = 0;
+    else  // majority vote
+      bpc_data->bpc_ctr_table[ii] = N_BIT_MASK(BPC_CIT_BITS);
+  }
 
-    bpc_data->opc_table = (Opc_Table*)malloc(sizeof(Opc_Table) * OPC_SIZE);
-    bpc_data->count = 0;
-    bpc_data->head = 0;
-    bpc_data->tail = 0;
-
-    // Allocate local history table
-    local_history_table = (uns*)malloc(sizeof(uns) * LHT_SIZE);
-    ASSERT(0, local_history_table);
-    for(ii = 0; ii < LHT_SIZE; ii++) {
-        local_history_table[ii] = 0; // Initialize local histories to 0
-    }
-
-    // Allocate pattern history table
-    pattern_history_table = (uns*)malloc(sizeof(uns) * PHT_SIZE);
-    ASSERT(0, pattern_history_table);
-    for(ii = 0; ii < PHT_SIZE; ii++) {
-        pattern_history_table[ii] = N_BIT_MASK(PHT_COUNTER_BITS - 1); // Initialize counters
-    }
+  bpc_data->opc_table = (Opc_Table*)malloc(sizeof(Opc_Table) * OPC_SIZE);
+  bpc_data->count     = 0;
+  bpc_data->head      = 0;
+  bpc_data->tail      = 0;
 }
 
 
@@ -116,60 +96,46 @@ void init_bp_conf() {
   (((uns32)(addr) >> (shift)) & (N_BIT_MASK(BPC_BITS)))
 
 void bp_conf_pred(Op* op) {
-  // uns32 index;
-  // uns   entry;
-  // Flag  pred_conf;
-  // Flag  mispred = op->oracle_info.mispred | op->oracle_info.misfetch;
+  uns32 index;
+  uns   entry;
+  Flag  pred_conf;
+  Flag  mispred = op->oracle_info.mispred | op->oracle_info.misfetch;
 
   // only updated on conditional branches
-  // Addr  addr        = op->inst_info->addr;
-  // uns32 hist        = g_bp_data->global_hist;
-  // uns32 cooked_hist = COOK_HIST_BITS(hist, 0);
-  // uns32 cooked_addr = COOK_ADDR_BITS(addr, 2);
-  // index             = cooked_hist ^ cooked_addr;
+  Addr  addr        = op->inst_info->addr;
+  uns32 hist        = g_bp_data->global_hist;
+  uns32 cooked_hist = COOK_HIST_BITS(hist, 0);
+  uns32 cooked_addr = COOK_ADDR_BITS(addr, 2);
+  index             = cooked_hist ^ cooked_addr;
 
-  // entry = bpc_data->bpc_ctr_table[index];
+  entry = bpc_data->bpc_ctr_table[index];
 
-  // if(BPC_MECH) {  // counter
-  //  pred_conf = (entry == N_BIT_MASK(BPC_CTR_BITS)) ? TRUE : FALSE;
-  // } else {  // majority vote
-  //   uns8  ii, count = 0;
-  //   uns32 mask = 1;
+  if(BPC_MECH) {  // counter
+    pred_conf = (entry == N_BIT_MASK(BPC_CTR_BITS)) ? TRUE : FALSE;
+  } else {  // majority vote
+    uns8  ii, count = 0;
+    uns32 mask = 1;
 
     // count ones
-  //   for(ii = 0; ii < BPC_CIT_BITS; ii++, mask <<= 1)
-  //     if(entry & mask)
-  //       count++;
-  //   pred_conf = count > (BPC_CIT_BITS * BPC_CIT_TH) / 100 ? TRUE : FALSE;
-  // }
+    for(ii = 0; ii < BPC_CIT_BITS; ii++, mask <<= 1)
+      if(entry & mask)
+        count++;
+    pred_conf = count > (BPC_CIT_BITS * BPC_CIT_TH) / 100 ? TRUE : FALSE;
+  }
 
-  // if(PERF_BP_CONF_PRED)
-  //  pred_conf = !(op->oracle_info.mispred || op->oracle_info.misfetch);
+  if(PERF_BP_CONF_PRED)
+    pred_conf = !(op->oracle_info.mispred || op->oracle_info.misfetch);
 
-  // _DEBUG(0, DEBUG_BP_CONF, "bp_conf_pred: op:%s mispred:%d, pred:%d,%d\n",
-  //       unsstr64(op->op_num), mispred, pred_conf, pred_conf != mispred);
+  _DEBUG(0, DEBUG_BP_CONF, "bp_conf_pred: op:%s mispred:%d, pred:%d,%d\n",
+         unsstr64(op->op_num), mispred, pred_conf, pred_conf != mispred);
 
-  // op->oracle_info.pred_conf_index = index;
-  // op->oracle_info.pred_conf       = pred_conf;
+  op->oracle_info.pred_conf_index = index;
+  op->oracle_info.pred_conf       = pred_conf;
 
-  // STAT_EVENT(op->proc_id, BP_ON_PATH_CONF_MISPRED + 2 * op->off_path +
-  //                           (pred_conf != mispred));
-  // STAT_EVENT(op->proc_id, BP_ON_PATH_PRED_MIS_CONF_MISPRED + 4 * op->off_path +
-  //                          2 * pred_conf + (pred_conf != mispred));
-  Addr addr = op->inst_info->addr;
-  uns lht_index = addr % LHT_SIZE;            // Index into the LHT
-  uns local_history = local_history_table[lht_index]; // Retrieve local history
-  uns pht_index = (local_history ^ (addr >> 2)) % PHT_SIZE; // Index into the PHT
-  uns counter = pattern_history_table[pht_index];          // Retrieve counter
-  Flag pred_conf = (counter >= (1 << (PHT_COUNTER_BITS - 1))); // MSB as confidence
-
-  // Stat tracking for predictions
-  stat_event(STAT_BP_CONF_PRED); // Log a prediction event
-
-  _DEBUG(0, DEBUG_BP_CONF, "bp_conf_pred: addr:0x%llx lht_idx:%d pht_idx:%d counter:%d pred_conf:%d\n",
-          addr, lht_index, pht_index, counter, pred_conf);
-
-  op->oracle_info.pred_conf = pred_conf; // Store prediction in the op structure
+  STAT_EVENT(op->proc_id, BP_ON_PATH_CONF_MISPRED + 2 * op->off_path +
+                            (pred_conf != mispred));
+  STAT_EVENT(op->proc_id, BP_ON_PATH_PRED_MIS_CONF_MISPRED + 4 * op->off_path +
+                            2 * pred_conf + (pred_conf != mispred));
 }
 
 
@@ -179,47 +145,27 @@ void bp_conf_pred(Op* op) {
 // 1: confident branch will go the right direction
 
 void bp_update_conf(Op* op) {
-  // uns32 index   = op->oracle_info.pred_conf_index;
-  // uns*  entry   = &bpc_data->bpc_ctr_table[index];
-  // Flag  mispred = op->oracle_info.mispred | op->oracle_info.misfetch;
+  uns32 index   = op->oracle_info.pred_conf_index;
+  uns*  entry   = &bpc_data->bpc_ctr_table[index];
+  Flag  mispred = op->oracle_info.mispred | op->oracle_info.misfetch;
 
-  // _DEBUG(0, DEBUG_BP_CONF, "bp_update_conf: op:%s mispred:%d\n",
-  //       unsstr64(op->op_num), mispred);
+  _DEBUG(0, DEBUG_BP_CONF, "bp_update_conf: op:%s mispred:%d\n",
+         unsstr64(op->op_num), mispred);
 
   // update the counters
-  //if(BPC_MECH)
+  if(BPC_MECH)
     // counter
-  //  if(mispred)
-  //    if(BPC_CTR_RESET)
+    if(mispred)
+      if(BPC_CTR_RESET)
         // biased towards confidence
-  //      *entry = 0;
-  //    else
-  //      *entry = SAT_DEC(*entry, 0);
-  //  else
-  //    *entry = SAT_INC(*entry, N_BIT_MASK(BPC_CTR_BITS));
-  //else
+        *entry = 0;
+      else
+        *entry = SAT_DEC(*entry, 0);
+    else
+      *entry = SAT_INC(*entry, N_BIT_MASK(BPC_CTR_BITS));
+  else
     // majority vote
-  //  *entry = ((*entry << 1) | !mispred) & N_BIT_MASK(BPC_CIT_BITS);
-  Addr addr = op->inst_info->addr;
-  uns lht_index = addr % LHT_SIZE; // Index into LHT
-  uns local_history = local_history_table[lht_index]; // Retrieve local history
-  uns pht_index = (local_history ^ (addr >> 2)) % PHT_SIZE; // Index into PHT
-  Flag mispred = op->oracle_info.mispred | op->oracle_info.misfetch;
-
-  _DEBUG(0, DEBUG_BP_CONF, "bp_update_conf: addr:0x%llx lht_idx:%d pht_idx:%d mispred:%d\n",
-          addr, lht_index, pht_index, mispred);
-
-  // Update counters based on misprediction
-  if (mispred) {
-      pattern_history_table[pht_index] = SAT_DEC(pattern_history_table[pht_index], 0);
-      stat_event(STAT_BP_MISPRED); // Log a misprediction event
-  } else {
-      pattern_history_table[pht_index] = SAT_INC(pattern_history_table[pht_index], N_BIT_MASK(PHT_COUNTER_BITS));
-      stat_event(STAT_BP_CORRECT); // Log a correct prediction event
-  }
-
-  // Update the local history
-  local_history_table[lht_index] = ((local_history << 1) | !mispred) & N_BIT_MASK(PHT_COUNTER_BITS);
+    *entry = ((*entry << 1) | !mispred) & N_BIT_MASK(BPC_CIT_BITS);
 }
 
 
