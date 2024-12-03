@@ -140,9 +140,6 @@ typedef struct Bp_Data_struct {
   struct Br_Conf_struct* br_conf;
 
   uns32 global_hist;
-  uns32* global_history_table;        // Global pattern history table (PHT)
-  uns32* local_history_table;         // Local history table
-  uns32* local_pattern_table;         // Local pattern history table (PHT)
   Cache btb;
 
   struct {
