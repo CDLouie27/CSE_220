@@ -10,69 +10,61 @@ typedef struct {
 } Two_Level_Predictor;
 
 // Static array of predictors (one per core or ID)
-static Two_Level_Predictor* predictors = NULL;
+static Two_Level_Predictor predictor;
 
 // Initialize the two-level predictor
-void bp_two_level_init(int id, int num_entries) {
-    if (!predictors) {
-        predictors = (Two_Level_Predictor*)calloc(10, sizeof(Two_Level_Predictor)); // Assuming up to 10 predictors
-    }
-    predictors[id].history = 0;
-    predictors[id].num_entries = num_entries;
-    predictors[id].pattern_table = (unsigned char*)calloc(num_entries, sizeof(unsigned char));
+void bp_two_level_init(void) {
+    predictor.history = 0;
+    predictor.num_entries = 1024; // Example size
+    predictor.pattern_table = (unsigned char*)calloc(predictor.num_entries, sizeof(unsigned char));
 }
 
 // Timestamp function (currently a stub for integration)
-void bp_two_level_timestamp(Op* op, int id) {
-    // Could be used for debug or timing information
-    (void)op;
-    (void)id;
+void bp_two_level_timestamp(Op* op) {
+    (void)op; // Stub for integration
 }
 
 // Make a prediction
-Flag bp_two_level_pred(Op* op, int id) {
-    Two_Level_Predictor* pred = &predictors[id];
-    unsigned int index = pred->history % pred->num_entries;
-    unsigned char counter = pred->pattern_table[index];
+Flag bp_two_level_pred(Op* op) {
+    unsigned int index = predictor.history % predictor.num_entries;
+    unsigned char counter = predictor.pattern_table[index];
     return counter >= 2; // Assume 2-bit saturating counters
 }
 
-// Speculative update (update predictor state speculatively)
-void bp_two_level_spec_update(Op* op, int id, Flag outcome) {
-    Two_Level_Predictor* pred = &predictors[id];
-    unsigned int index = pred->history % pred->num_entries;
-    if (outcome) {
-        if (pred->pattern_table[index] < 3) {
-            pred->pattern_table[index]++;
-        }
-    } else {
-        if (pred->pattern_table[index] > 0) {
-            pred->pattern_table[index]--;
-        }
-    }
-    pred->history = ((pred->history << 1) | outcome) & ((1 << 10) - 1); // 10-bit history
+// Speculative update (placeholder for outcome retrieval)
+void bp_two_level_spec_update(Op* op) {
+    (void)op;
+    // Stub: Outcome would need to be passed or retrieved here
 }
 
 // Update predictor after resolution
-void bp_two_level_update(Op* op, int id, Flag outcome) {
-    bp_two_level_spec_update(op, id, outcome);
+void bp_two_level_update(Op* op, Flag outcome) {
+    unsigned int index = predictor.history % predictor.num_entries;
+    if (outcome) {
+        if (predictor.pattern_table[index] < 3) {
+            predictor.pattern_table[index]++;
+        }
+    } else {
+        if (predictor.pattern_table[index] > 0) {
+            predictor.pattern_table[index]--;
+        }
+    }
+    predictor.history = ((predictor.history << 1) | outcome) & ((1 << 10) - 1); // 10-bit history
 }
 
 // Retire a branch (clean-up or final adjustments)
-void bp_two_level_retire(Op* op, int id) {
-    // No additional action needed for this simple predictor
-    (void)op;
-    (void)id;
+void bp_two_level_retire(Op* op) {
+    (void)op; // Stub for integration
 }
 
 // Recover predictor state after a misprediction
-void bp_two_level_recover(Op* op, int id) {
-    Two_Level_Predictor* pred = &predictors[id];
-    pred->history = 0; // Reset history on recovery
+void bp_two_level_recover(Recovery_Info* rec_info) {
+    predictor.history = 0; // Reset history on recovery
+    (void)rec_info; // Stub for recovery data usage
 }
 
-// Check if predictor is full (currently a stub for integration)
-Flag bp_two_level_full(int id) {
-    // Always return false, as no capacity check is needed
+// Check if predictor is full
+uns8 bp_two_level_full(uns id) {
+    (void)id; // No capacity issues in this example
     return 0;
 }
