@@ -140,7 +140,6 @@ typedef struct Bp_Data_struct {
   struct Br_Conf_struct* br_conf;
 
   uns32 global_hist;
-  TwoLevelPredictor two_level_predictor;
   Cache btb;
 
   struct {
