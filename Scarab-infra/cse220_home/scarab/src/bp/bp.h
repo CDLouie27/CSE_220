@@ -140,6 +140,7 @@ typedef struct Bp_Data_struct {
   struct Br_Conf_struct* br_conf;
 
   uns32 global_hist;
+  TwoLevelPredictor two_level_predictor;
   Cache btb;
 
   struct {
@@ -163,13 +164,9 @@ typedef struct Bp_Data_struct {
   uns8  target_bit_length;
 
   Flag on_path_pred;
-  // New fields for two-level branch predictor
-  uns32 *global_history_table; // Global pattern history table (PHT) for two-level predictor
-  uns32 *local_history_table;  // Local history table (LHT) if using local history
-  uns32 *local_pattern_table;  // Local pattern history table (LPT) if using local prediction
 
   List cbrs_in_machine;
-
+ 
 } Bp_Data;
 
 /**************************************************************************************/
@@ -183,6 +180,7 @@ typedef enum Bp_Id_enum {
   TAGESCL_BP,
   TAGESCL80_BP,
   TWO_LEVEL_BP,  // Add new two-level branch predictor here
+
 #define DEF_CBP(CBP_NAME, CBP_CLASS) CBP_CLASS##_BP,
 #include "cbp_table.def"
 #undef DEF_CBP
@@ -223,10 +221,6 @@ typedef struct Bp_struct {
   void (*recover_func)(Recovery_Info*); /* called to recover the bp when a
                                            misprediction is realized */
   uns8 (*full_func)(uns);
-
-  // Add new functions for two-level predictor
-  void (*global_update_func)(Op*);  // Update for global history-based PHT
-  void (*local_update_func)(Op*);   // Update for local history-based LHT
 } Bp;
 
 typedef struct Bp_Btb_struct {
@@ -300,21 +294,24 @@ void inc_bstat_miss(Op* op);
 
 /**************************************************************************************/
 
-#define GLOBAL_HISTORY_SIZE  16  // Example size for the global history register (GHR)
-#define LOCAL_HISTORY_SIZE   16  // Size for local history table
-#define GLOBAL_PHT_SIZE      1024  // Size of the global pattern history table
-#define LOCAL_PHT_SIZE       1024  // Size of the local pattern history table
+// #define GLOBAL_HISTORY_SIZE  16  // Example size for the global history register (GHR)
+// #define LOCAL_HISTORY_SIZE   16  // Size for local history table
+//#define GLOBAL_PHT_SIZE      1024  // Size of the global pattern history table
+//#define LOCAL_PHT_SIZE       1024  // Size of the local pattern history table
 
+// Two-level predictor data structures
+//typedef struct {
+  //  unsigned int global_history;
+    //unsigned int *global_pht;
+   // unsigned int *local_history_table;
+   // unsigned int *local_pht_table;
+//} TwoLevelPredictor;
 
-// Declare two_level predictor functions
-void bp_two_level_init(void);
-void bp_two_level_timestamp(void);
-int bp_two_level_pred(Addr pc);
-void bp_two_level_spec_update(Addr pc, int outcome);
-void bp_two_level_update(Addr pc, int outcome);
-void bp_two_level_retire(Addr pc);
-void bp_two_level_recover(Addr pc, int outcome);
-void bp_two_level_full(void);
-
+// Two-level predictor functions
+//void bp_two_level_init(Bp_Data *bp_data);
+//int bp_two_level_predict(Bp_Data *bp_data, Addr pc);
+//void bp_two_level_spec_update(Bp_Data *bp_data, Addr pc, int outcome);
+//void bp_two_level_update(Bp_Data *bp_data, Addr pc, int outcome);
+//void bp_two_level_recover(Bp_Data *bp_data, Addr pc, int outcome);
 
 #endif /* #ifndef __BP_H__ */

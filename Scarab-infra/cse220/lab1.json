@@ -5,7 +5,9 @@
     ],
     "experiment": "lab1",
     "configurations": {
-        "baseline": "--bp_mech TAGESCL_BP",
-        "two_level": "--bp_mech TWO_LEVEL_BP"
+        "baseline": "--bp_mech gshare",
+        "hybridgp": "--bp_mech hybridgp",
+        "tagescl": "--bp_mech tagescl",
+        "two_level": "--bp_mech two_level"
   }
 }

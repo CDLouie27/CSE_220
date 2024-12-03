@@ -59,6 +59,8 @@
 #include "prefetcher/pref.param.h"
 #include "prefetcher/fdip_new.h"
 
+#include "bp/two_level.h"
+
 /******************************************************************************/
 /* include the table of possible branch predictors */
 
@@ -325,28 +327,6 @@ Flag bp_is_predictable(Bp_Data* bp_data, uns proc_id) {
   return !bp_data->bp->full_func(proc_id);
 }
 
-void two_level_predictor_init(Bp_Data *bp_data) {
-    // Initialize global history register
-    bp_data->global_hist = 0;
-
-    // Allocate memory for global PHT
-    bp_data->global_history_table = (unsigned char *)malloc(sizeof(unsigned char) * GLOBAL_PHT_SIZE);
-    memset(bp_data->global_history_table, 0, sizeof(unsigned char) * GLOBAL_PHT_SIZE);
-
-    // Allocate memory for LHT
-    bp_data->local_history_table = (unsigned int *)malloc(sizeof(unsigned int) * LOCAL_HISTORY_SIZE);
-    memset(bp_data->local_history_table, 0, sizeof(unsigned int) * LOCAL_HISTORY_SIZE);
-
-    // Allocate memory for LPT
-    bp_data->local_pattern_table = (unsigned char *)malloc(sizeof(unsigned char) * LOCAL_PHT_SIZE);
-    memset(bp_data->local_pattern_table, 0, sizeof(unsigned char) * LOCAL_PHT_SIZE);
-
-    // Check allocations
-    if (!bp_data->global_history_table || !bp_data->local_history_table || !bp_data->local_pattern_table) {
-        fprintf(stderr, "Memory allocation failed in two_level_predictor_init\n");
-        exit(EXIT_FAILURE);
-    }
-}
 
 /******************************************************************************/
 /* bp_predict_op:  predicts the target of a control flow instruction */
@@ -1156,88 +1136,4 @@ void bp_recover_op(Bp_Data* bp_data, Cf_Type cf_type, Recovery_Info* info) {
 
   if (FDIP_DUAL_PATH_PREF_UOC_ONLINE_ENABLE)
     increment_branch_mispredictions(info->PC);
-}
-
-// Two level functions
-#define MAX_LOCAL_HISTORY_ENTRIES 1024
-#define LOCAL_HISTORY_BITS 10 // Example: Using 10 bits for local history
-#define LOCAL_PHT_SIZE (1 << LOCAL_HISTORY_BITS) // Size of local pattern history table
-
-// Local history and pattern history tables
-static unsigned int local_history_table[MAX_LOCAL_HISTORY_ENTRIES];
-static unsigned char local_pattern_table[LOCAL_PHT_SIZE];
-
-// Initialize the two-level predictor
-void bp_two_level_init(void) {
-    // Clear the local history and pattern history tables
-    for (int i = 0; i < MAX_LOCAL_HISTORY_ENTRIES; i++) {
-        local_history_table[i] = 0;
-    }
-    for (int i = 0; i < LOCAL_PHT_SIZE; i++) {
-        local_pattern_table[i] = 1; // Initialize to weakly taken (01)
-    }
-    printf("Two-level predictor initialized.\n");
-}
-
-// Timestamp function (optional for more complex predictors)
-void bp_two_level_timestamp(void) {
-    // Placeholder: Add logic if timestamping is required
-}
-
-// Make a prediction based on the local history
-int bp_two_level_pred(Addr pc) {
-    unsigned int index = pc % MAX_LOCAL_HISTORY_ENTRIES; // Map PC to history index
-    unsigned int local_history = local_history_table[index];
-    unsigned int pht_index = local_history % LOCAL_PHT_SIZE;
-    return local_pattern_table[pht_index] > 1; // Taken if the counter is >= 2
-}
-
-// Update speculatively based on the prediction
-void bp_two_level_spec_update(Addr pc, int outcome) {
-    // Placeholder: Add speculative update logic if needed
-}
-
-// Update the predictor with the actual outcome
-void bp_two_level_update(Addr pc, int outcome) {
-    unsigned int index = pc % MAX_LOCAL_HISTORY_ENTRIES;
-    unsigned int local_history = local_history_table[index];
-    unsigned int pht_index = local_history % LOCAL_PHT_SIZE;
-
-    // Update the pattern history table
-    if (outcome) {
-        if (local_pattern_table[pht_index] < 3) { // Increment up to 11 (strongly taken)
-            local_pattern_table[pht_index]++;
-        }
-    } else {
-        if (local_pattern_table[pht_index] > 0) { // Decrement down to 00 (strongly not taken)
-            local_pattern_table[pht_index]--;
-        }
-    }
-
-    // Update the local history table
-    local_history_table[index] = ((local_history << 1) | outcome) & ((1 << LOCAL_HISTORY_BITS) - 1);
-}
-
-// Retire the branch (no-op for this simple implementation)
-void bp_two_level_retire(Addr pc) {
-    // Placeholder for retire logic if needed
-}
-
-// Recover the predictor in case of misprediction
-void bp_two_level_recover(Addr pc, int outcome) {
-    // Recover the local history if necessary
-    unsigned int index = pc % MAX_LOCAL_HISTORY_ENTRIES;
-    unsigned int local_history = local_history_table[index];
-    local_history_table[index] = ((local_history << 1) | outcome) & ((1 << LOCAL_HISTORY_BITS) - 1);
-}
-
-// Full reset or dump state
-void bp_two_level_full(void) {
-    printf("Two-level predictor state:\n");
-    for (int i = 0; i < MAX_LOCAL_HISTORY_ENTRIES; i++) {
-        printf("History[%d]: %u\n", i, local_history_table[i]);
-    }
-    for (int i = 0; i < LOCAL_PHT_SIZE; i++) {
-        printf("PHT[%d]: %u\n", i, local_pattern_table[i]);
-    }
 }
