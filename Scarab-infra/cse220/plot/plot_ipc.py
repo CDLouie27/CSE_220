@@ -1,17 +1,13 @@
 import os
 import json
 import argparse
-import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-import csv
-from matplotlib import cm
 
 matplotlib.rc('font', size=14)
 
 def read_descriptor_from_json(descriptor_filename):
-    # Read the descriptor data from a JSON file
     try:
         with open(descriptor_filename, 'r') as json_file:
             descriptor_data = json.load(json_file)
@@ -23,89 +19,71 @@ def read_descriptor_from_json(descriptor_filename):
         print(f"Error decoding JSON in file '{descriptor_filename}': {e}")
         return None
 
-def get_IPC(descriptor_data, sim_path, output_dir):
-  benchmarks_org = descriptor_data["workloads_list"].copy()
-  benchmarks = []
-  ipc = {}
+def calculate_accuracy(sim_path, descriptor_data):
+    benchmarks = descriptor_data["workloads_list"]
+    configurations = descriptor_data["configurations"]
+    experiment = descriptor_data["experiment"]
+    accuracy = {}
 
-  try:
-    for config_key in descriptor_data["configurations"].keys():
-      ipc_config = []
-      avg_IPC_config = 0.0
-      cnt_benchmarks = 0
-      for benchmark in benchmarks_org:
-        benchmark_name = benchmark.split("/")
-        exp_path = sim_path+'/'+benchmark+'/'+descriptor_data["experiment"]+'/'
-        IPC = 0
-        with open(exp_path+config_key+'/memory.stat.0.csv') as f:
-          lines = f.readlines()
-          for line in lines:
-            if 'Periodic IPC' in line:
-              tokens = [x.strip() for x in line.split(',')]
-              IPC = float(tokens[1])
-              break
+    for config_key in configurations.keys():
+        accuracy[config_key] = []
+        for benchmark in benchmarks:
+            bp_file_path = os.path.join(sim_path, benchmark, experiment, config_key, "bp.stat.0.csv")
+            try:
+                br_correct = 0
+                br_recover = 0
+                with open(bp_file_path, "r") as bp_file:
+                    for line in bp_file:
+                        if "BR_CORRECT" in line:
+                            br_correct = float(line.split(",")[1].strip())
+                        elif "BR_RECOVER" in line:
+                            br_recover = float(line.split(",")[1].strip())
+                
+                # Calculate accuracy
+                total = br_correct + br_recover
+                acc = br_correct / total if total > 0 else 0
+                accuracy[config_key].append(acc)
+            except FileNotFoundError:
+                print(f"Error: File '{bp_file_path}' not found.")
+                accuracy[config_key].append(0)
+            except Exception as e:
+                print(f"Error processing file '{bp_file_path}': {e}")
+                accuracy[config_key].append(0)
 
-        avg_IPC_config += IPC
+    return benchmarks, accuracy
 
-        cnt_benchmarks = cnt_benchmarks + 1
-        if len(benchmarks_org) > len(benchmarks):
-          benchmarks.append(benchmark_name)
+def plot_accuracy(benchmarks, accuracy, output_dir):
+    colors = ['#800000', '#911eb4', '#4363d8', '#f58231', '#3cb44b', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#e6beff', '#e6194b', '#000075']
+    ind = np.arange(len(benchmarks))
+    width = 0.15
 
-        ipc_config.append(IPC)
+    fig, ax = plt.subplots(figsize=(14, 4.4), dpi=80)
 
-      num = len(benchmarks)
-      print(benchmarks)
-      ipc_config.append(avg_IPC_config/num)
-      ipc[config_key] = ipc_config
+    for idx, (config, values) in enumerate(accuracy.items()):
+        ax.bar(ind + idx * width, values, width=width, color=colors[idx % len(colors)], label=config)
 
-    benchmarks.append('Avg')
-    plot_data(benchmarks, ipc, 'IPC', output_dir+'/FigureA.png')
+    ax.set_xlabel("Benchmarks")
+    ax.set_ylabel("Branch Prediction Accuracy")
+    ax.set_xticks(ind + width * (len(accuracy) - 1) / 2)
+    ax.set_xticklabels(benchmarks, rotation=27, ha='right')
+    ax.grid('y')
+    ax.set_ylim(0, 1.0)
+    ax.legend(loc="upper left", ncols=2)
+    fig.tight_layout()
 
-  except Exception as e:
-    print(e)
-
-def plot_data(benchmarks, data, ylabel_name, fig_name, ylim=None):
-  print(data)
-  colors = ['#800000', '#911eb4', '#4363d8', '#f58231', '#3cb44b', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#e6beff', '#e6194b', '#000075', '#800000', '#9a6324', '#808080', '#ffffff', '#000000']
-  ind = np.arange(len(benchmarks))
-  width = 0.18
-  fig, ax = plt.subplots(figsize=(14, 4.4), dpi=80)
-  num_keys = len(data.keys())
-
-  idx = 0
-  start_id = -int(num_keys/2)
-  for key in data.keys():
-    hatch=''
-    if idx % 2:
-      hatch='\\\\'
-    else:
-      hatch='///'
-    ax.bar(ind + (start_id+idx)*width, data[key], width=width, fill=False, hatch=hatch, color=colors[idx], edgecolor=colors[idx], label=key)
-    idx += 1
-  ax.set_xlabel("Benchmarks")
-  ax.set_ylabel(ylabel_name)
-  ax.set_xticks(ind)
-  ax.set_xticklabels(benchmarks, rotation = 27, ha='right')
-  ax.grid('x');
-  if ylim != None:
-    ax.set_ylim(ylim)
-  ax.legend(loc="upper left", ncols=2)
-  fig.tight_layout()
-  plt.savefig(fig_name, format="png", bbox_inches="tight")
-
+    plot_path = os.path.join(output_dir, "Branch_Prediction_Accuracy.png")
+    plt.savefig(plot_path, format="png", bbox_inches="tight")
+    plt.show()
 
 if __name__ == "__main__":
-    # Create a parser for command-line arguments
-    parser = argparse.ArgumentParser(description='Read descriptor file name')
-    parser.add_argument('-o','--output_dir', required=True, help='Output path. Usage: -o /home/$USER/plot')
-    parser.add_argument('-d','--descriptor_name', required=True, help='Experiment descriptor name. Usage: -d /home/$USER/lab1.json')
-    parser.add_argument('-s','--simulation_path', required=True, help='Simulation result path. Usage: -s /home/$USER/exp/simulations')
+    parser = argparse.ArgumentParser(description='Read descriptor file and calculate branch prediction accuracy')
+    parser.add_argument('-o', '--output_dir', required=True, help='Output path. Usage: -o /home/$USER/plot')
+    parser.add_argument('-d', '--descriptor_name', required=True, help='Experiment descriptor name. Usage: -d /home/$USER/lab1.json')
+    parser.add_argument('-s', '--simulation_path', required=True, help='Simulation result path. Usage: -s /home/$USER/exp/simulations')
 
     args = parser.parse_args()
-    descriptor_filename = args.descriptor_name
 
-    descriptor_data = read_descriptor_from_json(descriptor_filename)
-    get_IPC(descriptor_data, args.simulation_path, args.output_dir)
-    plt.grid('x')
-    plt.tight_layout()
-    plt.show()
+    descriptor_data = read_descriptor_from_json(args.descriptor_name)
+    if descriptor_data:
+        benchmarks, accuracy = calculate_accuracy(args.simulation_path, descriptor_data)
+        plot_accuracy(benchmarks, accuracy, args.output_dir)

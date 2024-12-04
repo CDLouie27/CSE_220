@@ -1,13 +1,21 @@
 {
     "architecture": "sunny_cove",
     "workloads_list": [
-        "500.perlbench_r"
+        "500.perlbench_r",
+        "502.gcc_r",
+        "503.bwaves_r",
+        "505.mcf_r",
+        "507.cactuBSSN_r",
+        "508.namd_r",
+        "510.parest_r",
+        "511.povray_r",
+        "519.lbm_r",
+        "520.omnetpp_r"
     ],
     "experiment": "lab1",
     "configurations": {
-        "baseline": "--bp_mech gshare",
-        "hybridgp": "--bp_mech hybridgp",
-        "tagescl": "--bp_mech tagescl",
+        "tage": "--bp_mech tagescl",
+        "gshare": "--bp_mech gshare",
         "two_level": "--bp_mech two_level"
   }
 }

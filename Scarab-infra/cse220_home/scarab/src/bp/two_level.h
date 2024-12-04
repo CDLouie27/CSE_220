@@ -4,6 +4,13 @@
 #include "op.h"
 #include "bp.h"
 
+typedef struct TwoLevel {
+    // Existing fields
+    int dynamic_threshold; // Adaptive threshold for prediction updates
+    int mispredictions;    // Count of mispredictions in a recent window
+    int total_predictions; // Total predictions in the same window
+} TwoLevel;
+
 // Function prototypes for the two-level predictor
 void bp_two_level_init(void);
 void bp_two_level_timestamp(Op* op);
