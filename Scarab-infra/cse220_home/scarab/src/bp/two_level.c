@@ -11,14 +11,14 @@ typedef struct {
     unsigned int global_history;  // Global history for hybrid prediction
 } Two_Level_Predictor;
 
-// Static predictor (single instance for simplicity in this implementation)
+// Static predictor
 static Two_Level_Predictor predictor;
 
 // Initialize the two-level predictor
 void bp_two_level_init(void) {
     predictor.history = 0;
     predictor.global_history = 0;
-    predictor.num_entries = 1024; // Example size
+    predictor.num_entries = 1024;
     predictor.history_length = 10; // Start with 10-bit history
     predictor.pattern_table = (unsigned char*)calloc(predictor.num_entries, sizeof(unsigned char));
 }
@@ -34,16 +34,16 @@ Flag bp_two_level_pred(Op* op) {
     unsigned char counter = predictor.pattern_table[index];
 
     // Combine two-level and global predictions
-    unsigned char global_pred = (predictor.global_history % 2); // Simple global predictor
+    unsigned char global_pred = (predictor.global_history % 2); // global predictor
     unsigned char local_pred = (counter >= 2);
 
     return (local_pred + global_pred) > 1; // Majority vote
 }
 
-// Speculative update (placeholder for outcome retrieval)
+// Speculative update
 void bp_two_level_spec_update(Op* op) {
     (void)op;
-    // Stub: Outcome would need to be passed or retrieved here
+    // Stub
 }
 
 // Update predictor after resolution
@@ -93,7 +93,7 @@ void bp_two_level_recover(Recovery_Info* rec_info) {
         // Update the local history based on the correct branch direction
         predictor.history = ((predictor.history << 1) | rec_info->new_dir) & ((1 << predictor.history_length) - 1);
 
-        // Optionally, adjust the pattern table entry corresponding to the branch
+        // Adjust the pattern table entry corresponding to the branch
         unsigned int index = (predictor.history ^ predictor.global_history) % predictor.num_entries;
         if (rec_info->new_dir) {
             if (predictor.pattern_table[index] < 3) {
@@ -113,6 +113,6 @@ void bp_two_level_recover(Recovery_Info* rec_info) {
 
 // Check if predictor is full
 uns8 bp_two_level_full(uns id) {
-    (void)id; // No capacity issues in this example
+    (void)id;
     return 0;
 }
